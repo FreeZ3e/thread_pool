@@ -14,7 +14,7 @@ void func()
 
 int main()
 {
-	thread_pool<void> th_pool(50);
+	thread_pool<void> th_pool(cpu_type_task);
 
 	//clock begin
 	auto start = std::chrono::system_clock::now();
@@ -28,6 +28,7 @@ int main()
 
 
 	cout << "time = " << (double)duration.count() * std::chrono::microseconds::period::num / std::chrono::microseconds::period::den << 's' << endl;
+
 
 	system("pause");
 	return 0;

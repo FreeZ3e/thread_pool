@@ -6,6 +6,7 @@
 #include<mutex>
 #include<condition_variable>
 #include<future>
+#include<Windows.h>
 
 using std::vector;
 using std::queue;
@@ -16,6 +17,18 @@ using std::condition_variable;
 using std::packaged_task;
 using std::future;
 using std::bind;
+
+//task type tag
+constexpr bool io_type_task = true;
+constexpr bool cpu_type_task = false;
+
+size_t aux_processors_num()
+{
+	SYSTEM_INFO info;
+	GetSystemInfo(&info);
+
+	return info.dwNumberOfProcessors;
+}
 
 template<typename return_type>
 class thread_pool
@@ -33,10 +46,38 @@ class thread_pool
 		size_t thread_num = 0;
 		size_t tasks_num = 0;
 		bool stop_flag = false;
+		bool expand_flag = true;
 
 	public:
+		//set thread num by self and allow to expand
 		thread_pool(size_t num) : thread_num(num)
 		{
+			thread_set(thread_num);
+		}
+
+		//set thread num & expand flag by self
+		thread_pool(size_t num, bool expand_allow) :thread_num(num), expand_flag(expand_allow)
+		{
+			thread_set(thread_num);
+		}
+
+		//set thread num by task_type
+		//if io type, set thread_num as 2 * number of processors & allow to thread expand
+		//if cpu type, set thread_num as number of processors & forbid thread expand
+		thread_pool(bool task_type)
+		{
+			expand_flag = task_type;
+			thread_num = task_type ? (2 * aux_processors_num()) : aux_processors_num();
+
+			thread_set(thread_num);
+		}
+
+		//set thread num & expand flag by self
+		thread_pool(bool task_type, bool expand_allow)
+		{
+			expand_flag = expand_allow;
+			thread_num = task_type ? (2 * aux_processors_num()) : aux_processors_num();
+
 			thread_set(thread_num);
 		}
 
@@ -51,6 +92,7 @@ class thread_pool
 					p.detach();
 			}
 		}
+
 		
 		template<typename func, typename... args>
 		future_t submit_task(func&& f, args&&... arg)
@@ -67,7 +109,7 @@ class thread_pool
 			lock.unlock();
 
 			++tasks_num;
-			while (tasks_num >= thread_num)
+			while (expand_flag == true && tasks_num >= thread_num)
 				thread_refill();
 
 			cv.notify_one();
@@ -85,12 +127,12 @@ class thread_pool
 			stop_flag = false;
 		}
 
-		size_t worker_num()
+		size_t worker_num() const
 		{
 			return thread_num;
 		}
 
-		size_t task_num()
+		size_t task_num() const
 		{
 			return tasks_num;
 		}
